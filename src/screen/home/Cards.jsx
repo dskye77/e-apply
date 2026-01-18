@@ -53,7 +53,7 @@ const Card = ({ title, desc, desc2, button, link }) => {
         <p className="mb-4 text-center">{desc}</p>
         <p className="mb-4 text-center">{desc2}</p>
       </div>
-      <a href={link} target="_blank" rel="noopener noreferrer">
+      <a href={link} rel="noopener noreferrer">
         <button className="px-4 py-2 bg-black text-white rounded hover:bg-gray-600 cursor-pointer transition">
           {button}
         </button>
