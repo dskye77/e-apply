@@ -132,7 +132,7 @@ export default function FormInput({
         </label>
       );
     }
-    if (type === "text") {
+    if (type === "note") {
       return (
         <div className="text-gray-800 leading-relaxed">
           <p className="whitespace-pre-line">{placeholder}</p>

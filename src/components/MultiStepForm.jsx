@@ -52,19 +52,19 @@ export default function MultiStepForm({ STEPS }) {
 
       <form onSubmit={handleSubmit} className="space-y-8 pt-8">
         <div className="flex flex-col">
-          {currentStepData.fields.map((field) => {
+          {currentStepData.fields.map((field, index) => {
             if (field.type === "text") {
-              return <FormInput key={field.label} {...field} />;
+              return <FormInput key={index} {...field} />;
             }
 
             if (field.type === "group") {
               return (
-                <div key={field.label}>
+                <div key={index}>
                   <h3 className="text-lg font-medium mb-4">{field.label}</h3>
                   <div className="flex flex-col md:flex-row gap-6">
-                    {field.fields.map((sub) => (
+                    {field.fields.map((sub, subIdx) => (
                       <FormInput
-                        key={sub.name}
+                        key={subIdx}
                         {...sub}
                         value={formData[sub.name] ?? ""}
                         onChange={(e) =>
@@ -84,7 +84,7 @@ export default function MultiStepForm({ STEPS }) {
 
             return (
               <FormInput
-                key={field.name}
+                key={index}
                 {...field}
                 value={formData[field.name] ?? ""}
                 onChange={(e) =>
@@ -121,7 +121,7 @@ export default function MultiStepForm({ STEPS }) {
               </button>
             ) : (
               <button
-                type="button"
+                type="submit"
                 onClick={goToNext}
                 className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-700"
               >

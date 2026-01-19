@@ -1,8 +1,15 @@
 "use client";
 import MultiStepForm from "@/components/MultiStepForm";
-import { countries, form1, form2, form3, form4, form5 } from "@/data/data.js";
 
-const STEPS = [form1, form2, form3, form4, form5];
+import { countries, form1, form2, form3, form4, form5Plus } from "@/data/data.js";
+
+const STEPS = [
+  form1,
+  form2,
+  form3,
+  form4,
+  form5Plus
+];
 
 export default function BasicFormScreen() {
   return (
