@@ -436,31 +436,99 @@ const STEPS = [
     title: "Identification",
     desc: (
       <div>
-        <p>
+        <span>
           Proof of identification (max file size 25MB) (e.g. birth certificate,
           driving license, foreign passport, etc).
-        </p>
+        </span>
         <br />
-        <p>We keep all information private.</p>
+        <br />
+        <span>We keep all information private.</span>
       </div>
     ),
-    fields: [], // ← passport / ID details
+    fields: [
+      {
+        label: "File Upload",
+        name: "idDocument",
+        type: "file",
+        required: true,
+        fullWidth: true,
+      },
+    ],
   },
   {
-    id: "purpose",
-    title: "Purpose of Application",
-    fields: [], // ← motivation, etc.
+    id: "general-questions",
+    title: "General questions",
+    fields: [
+      {
+        label: "What is your motivation to become an e-Resident?",
+        name: "motivation",
+        type: "textarea",
+        required: true,
+        fullWidth: true,
+      },
+    ],
   },
   {
-    id: "review",
-    title: "Review & Submit",
-    fields: [], // ← will be replaced with summary
+    id: "additional-information",
+    title: "Additional information",
+    footerText: (
+      <div>
+        <h3 className="font-semibold">Price (e-Resident Basic)</h3>
+        <p>Processing fee cost (converted from EUR to USD): $29.00</p>
+      </div>
+    ),
+    fields: [
+      {
+        label:
+          "Do you have any criminal convictions? If so, please provide information.",
+        name: "criminalConvictions",
+        type: "textarea",
+        fullWidth: true,
+      },
+      {
+        label:
+          "Do you have any previous e-Resident application rejections? If so, please provide when and why.",
+        name: "previousRejections",
+        type: "textarea",
+        fullWidth: true,
+      },
+      {
+        label: "Any relevant information you would like to provide?",
+        name: "relevantInformation",
+        type: "textarea",
+        fullWidth: true,
+      },
+      {
+        label:
+          "I hereby declare that the information provided in this application is true and accurate to the best of my knowledge. I give permission for this application information to be stored in the nations database and I consent to the processing of my personal data for e-Residency purposes and understand that the information may be subject to verification.",
+        name: "declaration",
+        type: "radio-group",
+        required: true,
+        fullWidth: true,
+        options: [
+          { value: "yes", label: "Yes" },
+          { value: "no", label: "No" },
+        ],
+      },
+      {
+        placeholder:
+          "I have read and agree to the Terms and Conditions and Privacy Policy",
+        name: "termsAgreement",
+        type: "checkbox",
+        required: true,
+      },
+      {
+        type: "text",
+        label: "Notice",
+        placeholder: `Once you have submitted your application, it can take up to 14 days for a response on your e-Resident application. Due to the amount of applicants to upkeep our systems, we charge a processing fee. All proceeds go into the Verdisian Government to help build the nation. Please ensure that your application is well-made. Refunds are not permitted if your application is declined.`,
+      },
+    ],
   },
 ];
 
 export default function BasicFormScreen() {
   return (
-    <div className="max-w-6xl mx-auto my-12">
+    <div className="max-w-6xl mx-auto my-12 px-4 md:px-0">
       <h1 className="text-3xl font-bold mb-6 text-left">
         e-Resident Basic Application
       </h1>
