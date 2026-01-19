@@ -15,8 +15,13 @@ export default function MultiStepForm({ STEPS }) {
     setFormData((prev) => ({ ...prev, [name]: value }));
   }, []);
 
-  const goToNext = () =>
-    currentStep < totalSteps - 1 && setCurrentStep((p) => p + 1);
+  const goToNext = (e) => {
+    e.preventDefault();
+    if (currentStep < totalSteps - 1) {
+      setCurrentStep((p) => p + 1);
+    }
+  };
+
   const goToPrevious = () => currentStep > 0 && setCurrentStep((p) => p - 1);
 
   const handleSubmit = (e) => {
@@ -50,7 +55,10 @@ export default function MultiStepForm({ STEPS }) {
         <p>{currentStepData.desc}</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-8 pt-8">
+      <form
+        onSubmit={isLastStep ? handleSubmit : goToNext}
+        className="space-y-8 pt-8"
+      >
         <div className="flex flex-col">
           {currentStepData.fields.map((field, index) => {
             if (field.type === "text") {
@@ -108,7 +116,7 @@ export default function MultiStepForm({ STEPS }) {
               type="button"
               onClick={goToPrevious}
               disabled={currentStep === 0}
-              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-700"
+              className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Previous
             </button>
@@ -122,7 +130,6 @@ export default function MultiStepForm({ STEPS }) {
             ) : (
               <button
                 type="submit"
-                onClick={goToNext}
                 className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-700"
               >
                 Next
