@@ -36,12 +36,6 @@ export default function CryptoPayment({
     setInitializing(true);
     setError(null);
 
-    if (!NowPaymentsAPI.isConfigured()) {
-      setError("Payment system is not configured. Please contact support.");
-      setInitializing(false);
-      return;
-    }
-
     try {
       // Check API status
       const status = await NowPaymentsAPI.getStatus();
@@ -136,13 +130,7 @@ export default function CryptoPayment({
           `e-Residency Application - ${formData.firstName || "Applicant"} ${formData.lastName || ""}`.trim(),
       };
 
-      // Add callback URLs if available
-      if (process.env.NEXT_PUBLIC_APP_URL) {
-        orderData.ipn_callback_url = `${process.env.NEXT_PUBLIC_APP_URL}/api/payment/callback`;
-        orderData.success_url = `${process.env.NEXT_PUBLIC_APP_URL}/payment/success`;
-        orderData.cancel_url = `${process.env.NEXT_PUBLIC_APP_URL}/payment/cancel`;
-      }
-
+      // Callback URLs are now added server-side in the API route
       console.log("Creating payment with order data:", orderData);
 
       const payment = await NowPaymentsAPI.createPayment(orderData);
@@ -187,7 +175,7 @@ export default function CryptoPayment({
   }
 
   // Configuration error
-  if (error && !NowPaymentsAPI.isConfigured()) {
+  if (error && error.includes("not configured")) {
     return (
       <div className="p-6 bg-red-50 border-2 border-red-500 rounded-lg">
         <div className="text-6xl mb-4 text-center">⚠️</div>
@@ -290,23 +278,12 @@ export default function CryptoPayment({
     <div className="p-6 bg-white rounded-lg border">
       <h3 className="text-xl font-bold mb-4">Pay with Cryptocurrency</h3>
 
-      {!NowPaymentsAPI.isSandbox() && (
-        <div className="mb-4 p-3 bg-green-50 border border-green-300 rounded">
-          <p className="text-sm text-green-800">
-            🔒 <strong>Secure Payment:</strong> Your payment will be processed
-            securely via NOWPayments.
-          </p>
-        </div>
-      )}
-
-      {NowPaymentsAPI.isSandbox() && (
-        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-300 rounded">
-          <p className="text-sm text-yellow-800">
-            🧪 <strong>Sandbox Mode:</strong> This is a test environment. No
-            real payments will be processed.
-          </p>
-        </div>
-      )}
+      <div className="mb-4 p-3 bg-green-50 border border-green-300 rounded">
+        <p className="text-sm text-green-800">
+          🔒 <strong>Secure Payment:</strong> Your payment will be processed
+          securely via NOWPayments.
+        </p>
+      </div>
 
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-300 rounded">

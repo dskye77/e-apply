@@ -1,31 +1,14 @@
-// src/lib/nowpayments.js
-
-const API_URL =
-  process.env.NEXT_PUBLIC_NOWPAYMENTS_API_URL ||
-  "https://api.nowpayments.io/v1";
-const API_KEY = process.env.NEXT_PUBLIC_NOWPAYMENTS_API_KEY;
-
-// Validate API configuration
-if (!API_KEY) {
-  console.warn(
-    "⚠️ NOWPayments API key is not configured. Please set NEXT_PUBLIC_NOWPAYMENTS_API_KEY in your .env.local file",
-  );
-}
+// src/lib/nowpayments.js - Client-side API wrapper
 
 export class NowPaymentsAPI {
   static async makeRequest(endpoint, options = {}) {
-    if (!API_KEY) {
-      throw new Error("NOWPayments API key is not configured");
-    }
-
     try {
-      const url = `${API_URL}${endpoint}`;
+      const url = `/api/crypto${endpoint}`;
       console.log(`Making request to: ${url}`);
 
       const response = await fetch(url, {
         ...options,
         headers: {
-          "x-api-key": API_KEY,
           "Content-Type": "application/json",
           ...options.headers,
         },
@@ -35,17 +18,13 @@ export class NowPaymentsAPI {
 
       if (!response.ok) {
         console.error("API Error Response:", data);
-        throw new Error(
-          data.message ||
-            data.error ||
-            `API request failed: ${response.status}`,
-        );
+        throw new Error(data.error || `API request failed: ${response.status}`);
       }
 
       console.log(`Success response from ${endpoint}:`, data);
       return data;
     } catch (err) {
-      console.error(`NOWPayments API Error (${endpoint}):`, err.message);
+      console.error(`API Error (${endpoint}):`, err.message);
       throw err;
     }
   }
@@ -72,18 +51,6 @@ export class NowPaymentsAPI {
     }
   }
 
-  static async getMinimumAmount(currencyFrom, currencyTo = "usd") {
-    try {
-      const data = await this.makeRequest(
-        `/min-amount?currency_from=${currencyFrom}&currency_to=${currencyTo}`,
-      );
-      return data.min_amount || 0;
-    } catch (err) {
-      console.error("Error fetching minimum amount:", err);
-      return 0;
-    }
-  }
-
   static async getEstimatedPrice(amount, currencyFrom, currencyTo) {
     try {
       const data = await this.makeRequest(
@@ -104,7 +71,7 @@ export class NowPaymentsAPI {
   static async createPayment(paymentData) {
     try {
       console.log("Creating payment with data:", paymentData);
-      const data = await this.makeRequest("/payment", {
+      const data = await this.makeRequest("/create-payment", {
         method: "POST",
         body: JSON.stringify(paymentData),
       });
@@ -118,7 +85,7 @@ export class NowPaymentsAPI {
 
   static async getPaymentStatus(paymentId) {
     try {
-      const data = await this.makeRequest(`/payment/${paymentId}`);
+      const data = await this.makeRequest(`/payment-status/${paymentId}`);
       return data;
     } catch (err) {
       console.error("Error fetching payment status:", err);
@@ -126,29 +93,15 @@ export class NowPaymentsAPI {
     }
   }
 
-  static async createInvoice(invoiceData) {
-    try {
-      console.log("Creating invoice with data:", invoiceData);
-      const data = await this.makeRequest("/invoice", {
-        method: "POST",
-        body: JSON.stringify(invoiceData),
-      });
-      console.log("Invoice created:", data);
-      return data;
-    } catch (err) {
-      console.error("Error creating invoice:", err);
-      throw err;
-    }
-  }
-
-  // Helper to check if API is configured correctly
+  // Helper to check if API is configured (always true on client since we check server-side)
   static isConfigured() {
-    return !!API_KEY;
+    return true; // The server will handle configuration checks
   }
 
-  // Helper to check if in sandbox mode
+  // Helper to check if in sandbox mode (check via environment detection)
   static isSandbox() {
-    return API_URL.includes("sandbox");
+    // You could add an endpoint to check this if needed
+    return false;
   }
 
   // Get the current environment
