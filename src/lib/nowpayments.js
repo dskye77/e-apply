@@ -86,6 +86,7 @@ export class NowPaymentsAPI {
   static async getPaymentStatus(paymentId) {
     try {
       const data = await this.makeRequest(`/payment-status/${paymentId}`);
+      console.log("Payment status:", data);
       return data;
     } catch (err) {
       console.error("Error fetching payment status:", err);
@@ -95,12 +96,11 @@ export class NowPaymentsAPI {
 
   // Helper to check if API is configured (always true on client since we check server-side)
   static isConfigured() {
-    return true; // The server will handle configuration checks
+    return true;
   }
 
-  // Helper to check if in sandbox mode (check via environment detection)
+  // Helper to check if in sandbox mode
   static isSandbox() {
-    // You could add an endpoint to check this if needed
     return false;
   }
 

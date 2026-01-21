@@ -1,7 +1,7 @@
 // src/components/CryptoPayment.jsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { NowPaymentsAPI } from "@/lib/nowpayments";
 
 export default function CryptoPayment({
@@ -19,9 +19,20 @@ export default function CryptoPayment({
   const [paymentStatus, setPaymentStatus] = useState(null);
   const [error, setError] = useState(null);
   const [apiStatus, setApiStatus] = useState(null);
+  const [checkingPayment, setCheckingPayment] = useState(false);
+  const [currentPaymentStatus, setCurrentPaymentStatus] = useState(null);
+
+  const pollingIntervalRef = useRef(null);
 
   useEffect(() => {
     initializePayment();
+
+    // Cleanup polling on unmount
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -32,12 +43,18 @@ export default function CryptoPayment({
     }
   }, [selectedCurrency, amount]);
 
+  // Start polling when payment details are shown
+  useEffect(() => {
+    if (paymentStatus?.payment_id && !pollingIntervalRef.current) {
+      startPaymentPolling(paymentStatus.payment_id);
+    }
+  }, [paymentStatus]);
+
   async function initializePayment() {
     setInitializing(true);
     setError(null);
 
     try {
-      // Check API status
       const status = await NowPaymentsAPI.getStatus();
       setApiStatus(status);
 
@@ -45,7 +62,6 @@ export default function CryptoPayment({
         console.log("✅ NOWPayments API is operational");
       }
 
-      // Load available currencies
       await loadCurrencies();
     } catch (err) {
       console.error("Initialization error:", err);
@@ -64,7 +80,6 @@ export default function CryptoPayment({
         return;
       }
 
-      // Filter popular cryptocurrencies
       const popular = [
         "btc",
         "eth",
@@ -130,23 +145,19 @@ export default function CryptoPayment({
           `e-Residency Application - ${formData.firstName || "Applicant"} ${formData.lastName || ""}`.trim(),
       };
 
-      // Callback URLs are now added server-side in the API route
       console.log("Creating payment with order data:", orderData);
 
       const payment = await NowPaymentsAPI.createPayment(orderData);
       console.log("Payment created successfully:", payment);
 
       if (payment.invoice_url) {
-        // NOWPayments hosted invoice page
         console.log("Redirecting to invoice URL:", payment.invoice_url);
         window.location.href = payment.invoice_url;
       } else if (payment.payment_url) {
-        // Alternative payment URL
         console.log("Redirecting to payment URL:", payment.payment_url);
         setPaymentUrl(payment.payment_url);
         window.location.href = payment.payment_url;
       } else if (payment.pay_address) {
-        // Direct payment details
         console.log("Showing direct payment details");
         setPaymentStatus(payment);
       } else {
@@ -157,6 +168,72 @@ export default function CryptoPayment({
       setError(err.message || "Error creating payment. Please try again.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Poll payment status every 10 seconds
+  function startPaymentPolling(paymentId) {
+    console.log("Starting payment status polling for:", paymentId);
+
+    pollingIntervalRef.current = setInterval(async () => {
+      try {
+        const status = await NowPaymentsAPI.getPaymentStatus(paymentId);
+        console.log("Payment status update:", status);
+
+        setCurrentPaymentStatus(status.payment_status);
+
+        // Check if payment is completed
+        if (status.payment_status === "finished") {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+
+          // Redirect to success page
+          window.location.href = `/payment/success?payment_id=${paymentId}`;
+        } else if (
+          status.payment_status === "failed" ||
+          status.payment_status === "expired"
+        ) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+
+          setError("Payment failed or expired. Please try again.");
+        }
+      } catch (err) {
+        console.error("Error checking payment status:", err);
+      }
+    }, 10000); // Check every 10 seconds
+  }
+
+  async function handleCheckPaymentStatus() {
+    if (!paymentStatus?.payment_id) return;
+
+    setCheckingPayment(true);
+    try {
+      const status = await NowPaymentsAPI.getPaymentStatus(
+        paymentStatus.payment_id,
+      );
+      console.log("Manual payment status check:", status);
+
+      setCurrentPaymentStatus(status.payment_status);
+
+      if (status.payment_status === "finished") {
+        window.location.href = `/payment/success?payment_id=${paymentStatus.payment_id}`;
+      } else if (status.payment_status === "waiting") {
+        setError(
+          "Payment not yet received. Please send the exact amount to the address shown.",
+        );
+      } else if (status.payment_status === "confirming") {
+        setError("Payment received! Waiting for blockchain confirmations...");
+      } else {
+        setError(
+          `Payment status: ${status.payment_status}. Please wait or contact support.`,
+        );
+      }
+    } catch (err) {
+      console.error("Error checking payment status:", err);
+      setError("Unable to check payment status. Please try again.");
+    } finally {
+      setCheckingPayment(false);
     }
   }
 
@@ -203,6 +280,33 @@ export default function CryptoPayment({
     return (
       <div className="p-6 bg-white rounded-lg border">
         <h3 className="text-xl font-bold mb-4">Complete Your Payment</h3>
+
+        {/* Show current payment status */}
+        {currentPaymentStatus && (
+          <div
+            className={`mb-4 p-3 rounded border ${
+              currentPaymentStatus === "waiting"
+                ? "bg-yellow-50 border-yellow-300"
+                : currentPaymentStatus === "confirming"
+                  ? "bg-blue-50 border-blue-300"
+                  : currentPaymentStatus === "finished"
+                    ? "bg-green-50 border-green-300"
+                    : "bg-gray-50 border-gray-300"
+            }`}
+          >
+            <p className="text-sm font-semibold">
+              Status:{" "}
+              {currentPaymentStatus === "waiting"
+                ? "⏳ Waiting for payment"
+                : currentPaymentStatus === "confirming"
+                  ? "🔄 Confirming transaction"
+                  : currentPaymentStatus === "finished"
+                    ? "✅ Payment confirmed"
+                    : currentPaymentStatus}
+            </p>
+          </div>
+        )}
+
         <div className="space-y-4">
           <div className="bg-blue-50 p-4 rounded">
             <p className="text-sm text-gray-600 mb-1">Amount to send:</p>
@@ -248,18 +352,26 @@ export default function CryptoPayment({
             <ul className="text-sm text-yellow-800 space-y-1 list-disc list-inside">
               <li>Send the exact amount shown above</li>
               <li>Payment will be confirmed automatically</li>
-              <li>Do not close this page until payment is complete</li>
+              <li>
+                Do not close this page - we&apos;re monitoring for your payment
+              </li>
+              <li>Confirmation may take a few minutes</li>
             </ul>
           </div>
 
+          {error && (
+            <div className="bg-red-50 p-3 border border-red-300 rounded">
+              <p className="text-sm text-red-800">{error}</p>
+            </div>
+          )}
+
           <div className="flex gap-3 pt-4">
             <button
-              onClick={() =>
-                (window.location.href = `/payment/success?payment_id=${paymentStatus.payment_id}`)
-              }
-              className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              onClick={handleCheckPaymentStatus}
+              disabled={checkingPayment}
+              className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              I&apos;ve Sent the Payment
+              {checkingPayment ? "Checking..." : "Check Payment Status"}
             </button>
             <button
               onClick={onCancel}
@@ -268,6 +380,10 @@ export default function CryptoPayment({
               Cancel
             </button>
           </div>
+
+          <p className="text-xs text-gray-500 text-center">
+            We&apos;re automatically checking for your payment every 10 seconds
+          </p>
         </div>
       </div>
     );
