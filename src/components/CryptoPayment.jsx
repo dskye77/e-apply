@@ -14,139 +14,345 @@ export default function CryptoPayment({
   const [selectedCurrency, setSelectedCurrency] = useState("");
   const [estimatedAmount, setEstimatedAmount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [initializing, setInitializing] = useState(true);
   const [paymentUrl, setPaymentUrl] = useState(null);
   const [paymentStatus, setPaymentStatus] = useState(null);
+  const [error, setError] = useState(null);
+  const [apiStatus, setApiStatus] = useState(null);
 
   useEffect(() => {
-    loadCurrencies();
+    initializePayment();
   }, []);
 
   useEffect(() => {
     if (selectedCurrency) {
       fetchEstimate();
+    } else {
+      setEstimatedAmount(0);
     }
-  }, [selectedCurrency]);
+  }, [selectedCurrency, amount]);
+
+  async function initializePayment() {
+    setInitializing(true);
+    setError(null);
+
+    if (!NowPaymentsAPI.isConfigured()) {
+      setError("Payment system is not configured. Please contact support.");
+      setInitializing(false);
+      return;
+    }
+
+    try {
+      // Check API status
+      const status = await NowPaymentsAPI.getStatus();
+      setApiStatus(status);
+
+      if (status && status.message === "OK") {
+        console.log("✅ NOWPayments API is operational");
+      }
+
+      // Load available currencies
+      await loadCurrencies();
+    } catch (err) {
+      console.error("Initialization error:", err);
+      setError("Unable to connect to payment service. Please try again.");
+    } finally {
+      setInitializing(false);
+    }
+  }
 
   async function loadCurrencies() {
-    const curr = await NowPaymentsAPI.getAvailableCurrencies();
-    // Filter popular cryptocurrencies
-    const popular = ["btc", "eth", "ltc", "usdt", "usdc", "sol", "bnb"];
-    const filtered = curr.filter((c) => popular.includes(c.toLowerCase()));
-    setCurrencies(filtered);
+    try {
+      const curr = await NowPaymentsAPI.getAvailableCurrencies();
+
+      if (curr.length === 0) {
+        setError("Unable to load payment currencies. Please try again later.");
+        return;
+      }
+
+      // Filter popular cryptocurrencies
+      const popular = [
+        "btc",
+        "eth",
+        "ltc",
+        "usdt",
+        "usdc",
+        "sol",
+        "bnb",
+        "trx",
+        "xrp",
+        "doge",
+        "ada",
+      ];
+      const filtered = curr.filter((c) => popular.includes(c.toLowerCase()));
+      const finalList = filtered.length > 0 ? filtered : curr.slice(0, 15);
+
+      setCurrencies(finalList);
+      console.log(`✅ Loaded ${finalList.length} cryptocurrencies`);
+    } catch (err) {
+      console.error("Error loading currencies:", err);
+      setError("Unable to load payment currencies. Please try again.");
+    }
   }
 
   async function fetchEstimate() {
     if (!selectedCurrency) return;
-    const estimate = await NowPaymentsAPI.getEstimatedPrice(
-      amount,
-      "usd",
-      selectedCurrency,
-    );
-    setEstimatedAmount(estimate);
+
+    try {
+      setError(null);
+      const estimate = await NowPaymentsAPI.getEstimatedPrice(
+        amount,
+        "usd",
+        selectedCurrency,
+      );
+
+      if (estimate > 0) {
+        setEstimatedAmount(estimate);
+      } else {
+        setError("Unable to get price estimate. Please try another currency.");
+      }
+    } catch (err) {
+      console.error("Estimate error:", err);
+      setError("Unable to get price estimate. Please try another currency.");
+    }
   }
 
   async function handlePayment() {
     if (!selectedCurrency) {
-      alert("Please select a cryptocurrency");
+      setError("Please select a cryptocurrency");
       return;
     }
 
     setLoading(true);
+    setError(null);
 
     try {
-      const paymentData = {
+      const orderData = {
         price_amount: amount,
         price_currency: "usd",
         pay_currency: selectedCurrency,
-        ipn_callback_url: `${process.env.NEXT_PUBLIC_APP_URL}/api/payment/callback`,
-        order_id: `order_${Date.now()}`,
-        order_description: `e-Residency Application - ${formData.firstName} ${formData.lastName}`,
-        success_url: `${process.env.NEXT_PUBLIC_APP_URL}/payment/success`,
-        cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/payment/cancel`,
+        order_id: `eres_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        order_description:
+          `e-Residency Application - ${formData.firstName || "Applicant"} ${formData.lastName || ""}`.trim(),
       };
 
-      const payment = await NowPaymentsAPI.createPayment(paymentData);
+      // Add callback URLs if available
+      if (process.env.NEXT_PUBLIC_APP_URL) {
+        orderData.ipn_callback_url = `${process.env.NEXT_PUBLIC_APP_URL}/api/payment/callback`;
+        orderData.success_url = `${process.env.NEXT_PUBLIC_APP_URL}/payment/success`;
+        orderData.cancel_url = `${process.env.NEXT_PUBLIC_APP_URL}/payment/cancel`;
+      }
 
-      if (payment.payment_url) {
+      console.log("Creating payment with order data:", orderData);
+
+      const payment = await NowPaymentsAPI.createPayment(orderData);
+      console.log("Payment created successfully:", payment);
+
+      if (payment.invoice_url) {
+        // NOWPayments hosted invoice page
+        console.log("Redirecting to invoice URL:", payment.invoice_url);
+        window.location.href = payment.invoice_url;
+      } else if (payment.payment_url) {
+        // Alternative payment URL
+        console.log("Redirecting to payment URL:", payment.payment_url);
         setPaymentUrl(payment.payment_url);
-        // Redirect to payment page
         window.location.href = payment.payment_url;
       } else if (payment.pay_address) {
-        // Show payment details if direct payment
+        // Direct payment details
+        console.log("Showing direct payment details");
         setPaymentStatus(payment);
+      } else {
+        throw new Error("No payment URL or address returned from API");
       }
     } catch (err) {
-      alert("Error creating payment. Please try again.");
-      console.error(err);
+      console.error("Payment creation error:", err);
+      setError(err.message || "Error creating payment. Please try again.");
     } finally {
       setLoading(false);
     }
   }
 
-  if (paymentStatus && !paymentUrl) {
+  // Loading state
+  if (initializing) {
     return (
       <div className="p-6 bg-white rounded-lg border">
-        <h3 className="text-xl font-bold mb-4">Payment Details</h3>
-        <div className="space-y-4">
-          <div>
-            <p className="text-sm text-gray-600">Send exactly:</p>
-            <p className="text-2xl font-bold">
-              {paymentStatus.pay_amount}{" "}
-              {paymentStatus.pay_currency.toUpperCase()}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-600">To address:</p>
-            <p className="text-sm font-mono bg-gray-100 p-2 rounded break-all">
-              {paymentStatus.pay_address}
-            </p>
-          </div>
-          <div className="bg-yellow-50 p-4 rounded">
-            <p className="text-sm text-yellow-800">
-              ⚠️ Send the exact amount to complete the payment. Payment will be
-              confirmed automatically.
-            </p>
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Initializing payment system...</p>
           </div>
         </div>
       </div>
     );
   }
 
+  // Configuration error
+  if (error && !NowPaymentsAPI.isConfigured()) {
+    return (
+      <div className="p-6 bg-red-50 border-2 border-red-500 rounded-lg">
+        <div className="text-6xl mb-4 text-center">⚠️</div>
+        <h3 className="text-xl font-bold text-red-800 mb-4 text-center">
+          Payment System Not Configured
+        </h3>
+        <p className="text-red-700 mb-6 text-center">
+          The cryptocurrency payment system is not properly configured. Please
+          contact support.
+        </p>
+        <div className="text-center">
+          <button
+            onClick={onCancel}
+            className="px-6 py-3 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+          >
+            Go Back
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Direct payment details view
+  if (paymentStatus && !paymentUrl) {
+    return (
+      <div className="p-6 bg-white rounded-lg border">
+        <h3 className="text-xl font-bold mb-4">Complete Your Payment</h3>
+        <div className="space-y-4">
+          <div className="bg-blue-50 p-4 rounded">
+            <p className="text-sm text-gray-600 mb-1">Amount to send:</p>
+            <p className="text-3xl font-bold text-blue-600">
+              {paymentStatus.pay_amount}{" "}
+              {paymentStatus.pay_currency.toUpperCase()}
+            </p>
+          </div>
+
+          <div>
+            <p className="text-sm text-gray-600 mb-2">Payment address:</p>
+            <div className="flex gap-2 items-center">
+              <div className="flex-1 bg-gray-100 p-3 rounded border">
+                <p className="text-sm font-mono break-all">
+                  {paymentStatus.pay_address}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(paymentStatus.pay_address);
+                  alert("Address copied to clipboard!");
+                }}
+                className="px-4 py-3 bg-blue-600 text-white rounded hover:bg-blue-700 whitespace-nowrap"
+              >
+                Copy
+              </button>
+            </div>
+          </div>
+
+          {paymentStatus.payment_id && (
+            <div>
+              <p className="text-sm text-gray-600">Payment ID:</p>
+              <p className="text-sm font-mono bg-gray-100 p-2 rounded">
+                {paymentStatus.payment_id}
+              </p>
+            </div>
+          )}
+
+          <div className="bg-yellow-50 p-4 rounded border border-yellow-300">
+            <p className="text-sm text-yellow-800 font-semibold mb-2">
+              ⚠️ Important:
+            </p>
+            <ul className="text-sm text-yellow-800 space-y-1 list-disc list-inside">
+              <li>Send the exact amount shown above</li>
+              <li>Payment will be confirmed automatically</li>
+              <li>Do not close this page until payment is complete</li>
+            </ul>
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <button
+              onClick={() =>
+                (window.location.href = `/payment/success?payment_id=${paymentStatus.payment_id}`)
+              }
+              className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
+            >
+              I&apos;ve Sent the Payment
+            </button>
+            <button
+              onClick={onCancel}
+              className="px-6 py-3 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Main payment selection view
   return (
     <div className="p-6 bg-white rounded-lg border">
       <h3 className="text-xl font-bold mb-4">Pay with Cryptocurrency</h3>
 
-      <div className="mb-4">
-        <p className="text-sm text-gray-600 mb-2">Amount to pay:</p>
-        <p className="text-2xl font-bold">${amount} USD</p>
+      {!NowPaymentsAPI.isSandbox() && (
+        <div className="mb-4 p-3 bg-green-50 border border-green-300 rounded">
+          <p className="text-sm text-green-800">
+            🔒 <strong>Secure Payment:</strong> Your payment will be processed
+            securely via NOWPayments.
+          </p>
+        </div>
+      )}
+
+      {NowPaymentsAPI.isSandbox() && (
+        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-300 rounded">
+          <p className="text-sm text-yellow-800">
+            🧪 <strong>Sandbox Mode:</strong> This is a test environment. No
+            real payments will be processed.
+          </p>
+        </div>
+      )}
+
+      {error && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-300 rounded">
+          <p className="text-sm text-red-800">❌ {error}</p>
+        </div>
+      )}
+
+      <div className="mb-6 p-4 bg-gray-50 rounded">
+        <p className="text-sm text-gray-600 mb-1">Total amount:</p>
+        <p className="text-3xl font-bold">${amount} USD</p>
       </div>
 
       <div className="mb-4">
         <label className="block mb-2 text-sm font-semibold">
-          Select Cryptocurrency
+          Select Cryptocurrency *
         </label>
         <select
           value={selectedCurrency}
           onChange={(e) => setSelectedCurrency(e.target.value)}
-          className="w-full px-4 py-2 border rounded-md"
+          className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          disabled={loading || currencies.length === 0}
         >
-          <option value="">— Select currency —</option>
+          <option value="">— Select cryptocurrency —</option>
           {currencies.map((curr) => (
             <option key={curr} value={curr}>
               {curr.toUpperCase()}
             </option>
           ))}
         </select>
+        {currencies.length === 0 && (
+          <p className="text-xs text-red-600 mt-1">
+            No cryptocurrencies available. Please refresh the page.
+          </p>
+        )}
       </div>
 
-      {estimatedAmount > 0 && (
-        <div className="mb-4 p-3 bg-blue-50 rounded">
-          <p className="text-sm text-gray-600">Estimated amount:</p>
-          <p className="text-lg font-semibold">
+      {estimatedAmount > 0 && selectedCurrency && (
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded">
+          <p className="text-sm text-gray-600 mb-1">
+            You will pay approximately:
+          </p>
+          <p className="text-2xl font-bold text-blue-600">
             ≈ {estimatedAmount} {selectedCurrency.toUpperCase()}
           </p>
-          <p className="text-xs text-gray-500 mt-1">
-            * Final amount will be calculated at checkout
+          <p className="text-xs text-gray-500 mt-2">
+            * Exchange rate is fixed at checkout
           </p>
         </div>
       )}
@@ -154,18 +360,50 @@ export default function CryptoPayment({
       <div className="flex gap-3">
         <button
           onClick={handlePayment}
-          disabled={loading || !selectedCurrency}
-          className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={loading || !selectedCurrency || currencies.length === 0}
+          className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold transition-colors"
         >
-          {loading ? "Processing..." : "Proceed to Payment"}
+          {loading ? (
+            <span className="flex items-center justify-center">
+              <svg
+                className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                ></circle>
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                ></path>
+              </svg>
+              Processing...
+            </span>
+          ) : (
+            "Proceed to Payment"
+          )}
         </button>
         <button
           onClick={onCancel}
           disabled={loading}
-          className="px-6 py-3 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+          className="px-6 py-3 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 disabled:opacity-50 transition-colors"
         >
           Cancel
         </button>
+      </div>
+
+      <div className="mt-6 pt-6 border-t border-gray-200">
+        <p className="text-xs text-gray-500 text-center">
+          Powered by NOWPayments • Secure Cryptocurrency Processing
+        </p>
       </div>
     </div>
   );

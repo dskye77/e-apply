@@ -1,17 +1,70 @@
 // src/lib/nowpayments.js
 
-const API_URL = process.env.NEXT_PUBLIC_NOWPAYMENTS_API_URL;
+const API_URL =
+  process.env.NEXT_PUBLIC_NOWPAYMENTS_API_URL ||
+  "https://api.nowpayments.io/v1";
 const API_KEY = process.env.NEXT_PUBLIC_NOWPAYMENTS_API_KEY;
 
+// Validate API configuration
+if (!API_KEY) {
+  console.warn(
+    "⚠️ NOWPayments API key is not configured. Please set NEXT_PUBLIC_NOWPAYMENTS_API_KEY in your .env.local file",
+  );
+}
+
 export class NowPaymentsAPI {
-  static async getAvailableCurrencies() {
+  static async makeRequest(endpoint, options = {}) {
+    if (!API_KEY) {
+      throw new Error("NOWPayments API key is not configured");
+    }
+
     try {
-      const res = await fetch(`${API_URL}/currencies`, {
+      const url = `${API_URL}${endpoint}`;
+      console.log(`Making request to: ${url}`);
+
+      const response = await fetch(url, {
+        ...options,
         headers: {
           "x-api-key": API_KEY,
+          "Content-Type": "application/json",
+          ...options.headers,
         },
       });
-      const data = await res.json();
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        console.error("API Error Response:", data);
+        throw new Error(
+          data.message ||
+            data.error ||
+            `API request failed: ${response.status}`,
+        );
+      }
+
+      console.log(`Success response from ${endpoint}:`, data);
+      return data;
+    } catch (err) {
+      console.error(`NOWPayments API Error (${endpoint}):`, err.message);
+      throw err;
+    }
+  }
+
+  static async getStatus() {
+    try {
+      const data = await this.makeRequest("/status");
+      console.log("API Status:", data);
+      return data;
+    } catch (err) {
+      console.error("Error checking API status:", err);
+      return null;
+    }
+  }
+
+  static async getAvailableCurrencies() {
+    try {
+      const data = await this.makeRequest("/currencies");
+      console.log("Available currencies:", data.currencies?.length);
       return data.currencies || [];
     } catch (err) {
       console.error("Error fetching currencies:", err);
@@ -21,15 +74,9 @@ export class NowPaymentsAPI {
 
   static async getMinimumAmount(currencyFrom, currencyTo = "usd") {
     try {
-      const res = await fetch(
-        `${API_URL}/min-amount?currency_from=${currencyFrom}&currency_to=${currencyTo}`,
-        {
-          headers: {
-            "x-api-key": API_KEY,
-          },
-        },
+      const data = await this.makeRequest(
+        `/min-amount?currency_from=${currencyFrom}&currency_to=${currencyTo}`,
       );
-      const data = await res.json();
       return data.min_amount || 0;
     } catch (err) {
       console.error("Error fetching minimum amount:", err);
@@ -37,17 +84,16 @@ export class NowPaymentsAPI {
     }
   }
 
-  static async getEstimatedPrice(amount, currencyFrom, currencyTo = "usd") {
+  static async getEstimatedPrice(amount, currencyFrom, currencyTo) {
     try {
-      const res = await fetch(
-        `${API_URL}/estimate?amount=${amount}&currency_from=${currencyFrom}&currency_to=${currencyTo}`,
-        {
-          headers: {
-            "x-api-key": API_KEY,
-          },
-        },
+      const data = await this.makeRequest(
+        `/estimate?amount=${amount}&currency_from=${currencyFrom}&currency_to=${currencyTo}`,
       );
-      const data = await res.json();
+      console.log(
+        `Estimate for ${amount} ${currencyFrom}:`,
+        data.estimated_amount,
+        currencyTo,
+      );
       return data.estimated_amount || 0;
     } catch (err) {
       console.error("Error fetching estimate:", err);
@@ -57,15 +103,12 @@ export class NowPaymentsAPI {
 
   static async createPayment(paymentData) {
     try {
-      const res = await fetch(`${API_URL}/payment`, {
+      console.log("Creating payment with data:", paymentData);
+      const data = await this.makeRequest("/payment", {
         method: "POST",
-        headers: {
-          "x-api-key": API_KEY,
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify(paymentData),
       });
-      const data = await res.json();
+      console.log("Payment created:", data);
       return data;
     } catch (err) {
       console.error("Error creating payment:", err);
@@ -75,16 +118,41 @@ export class NowPaymentsAPI {
 
   static async getPaymentStatus(paymentId) {
     try {
-      const res = await fetch(`${API_URL}/payment/${paymentId}`, {
-        headers: {
-          "x-api-key": API_KEY,
-        },
-      });
-      const data = await res.json();
+      const data = await this.makeRequest(`/payment/${paymentId}`);
       return data;
     } catch (err) {
       console.error("Error fetching payment status:", err);
       throw err;
     }
+  }
+
+  static async createInvoice(invoiceData) {
+    try {
+      console.log("Creating invoice with data:", invoiceData);
+      const data = await this.makeRequest("/invoice", {
+        method: "POST",
+        body: JSON.stringify(invoiceData),
+      });
+      console.log("Invoice created:", data);
+      return data;
+    } catch (err) {
+      console.error("Error creating invoice:", err);
+      throw err;
+    }
+  }
+
+  // Helper to check if API is configured correctly
+  static isConfigured() {
+    return !!API_KEY;
+  }
+
+  // Helper to check if in sandbox mode
+  static isSandbox() {
+    return API_URL.includes("sandbox");
+  }
+
+  // Get the current environment
+  static getEnvironment() {
+    return this.isSandbox() ? "sandbox" : "production";
   }
 }

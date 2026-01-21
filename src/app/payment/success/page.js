@@ -1,18 +1,12 @@
 // src/app/payment/success/page.js
 "use client";
 
-import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 export default function PaymentSuccessPage() {
   const searchParams = useSearchParams();
-  const [paymentId, setPaymentId] = useState(null);
-
-  useEffect(() => {
-    const id = searchParams.get("payment_id");
-    if (id) setPaymentId(id);
-  }, [searchParams]);
+  const paymentId = searchParams.get("payment_id");
 
   return (
     <div className="max-w-2xl mx-auto my-12 px-4">
