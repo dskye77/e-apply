@@ -1,11 +1,14 @@
+// src/components/MultiStepForm.jsx
 "use client";
 
 import { useState, useCallback } from "react";
 import FormInput from "./FormInput";
+import CryptoPayment from "./CryptoPayment";
 
-export default function MultiStepForm({ STEPS }) {
+export default function MultiStepForm({ STEPS, amount = 29 }) {
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState({});
+  const [showPayment, setShowPayment] = useState(false);
 
   const totalSteps = STEPS.length;
   const progress = ((currentStep + 1) / totalSteps) * 100;
@@ -26,11 +29,34 @@ export default function MultiStepForm({ STEPS }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    console.log("Submitted application data:", formData);
-    alert("Application submitted! (Check console)");
+    // Show payment screen instead of submitting directly
+    setShowPayment(true);
+  };
+
+  const handlePaymentSuccess = () => {
+    console.log("Payment successful! Application data:", formData);
+    alert("Payment successful! Your application has been submitted.");
+    // Here you would send the formData to your backend
+  };
+
+  const handlePaymentCancel = () => {
+    setShowPayment(false);
   };
 
   const isLastStep = currentStep === totalSteps - 1;
+
+  if (showPayment) {
+    return (
+      <div className="w-full mx-auto max-w-2xl">
+        <CryptoPayment
+          amount={amount}
+          formData={formData}
+          onSuccess={handlePaymentSuccess}
+          onCancel={handlePaymentCancel}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="w-full mx-auto">
@@ -125,7 +151,7 @@ export default function MultiStepForm({ STEPS }) {
                 type="submit"
                 className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
               >
-                Submit
+                Proceed to Payment
               </button>
             ) : (
               <button
